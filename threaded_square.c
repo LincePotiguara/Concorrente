@@ -15,7 +15,7 @@ typedef struct {
 void* quadrado(void* arg)
 {
     Array *array = (void *)arg;
-    printf("Tamanho: %d \n", array->size);
+    //printf("Tamanho: %d \n", array->size);
     for(int i = 0; i < array->size; i++)
     {
         array->data[i] = array->data[i] * array->data[i];
@@ -70,13 +70,19 @@ int main(int argc, char **argv)
         exit(-1);
     }
     // Executa o código após o encerramento dos demais threads
-    printf("Encerramento\n");
-    /*
+    int all_true = 1;
     for(int i = 0; i < NUM_ENTRIES; i++)
     {
-        printf("%lld \n", arg[i]);
+         all_true &= (arg[i] == (i + 1)*(i + 1));
     }
-    */
+    if(all_true)
+    {
+        puts("Resultado: sucesso");
+    }
+    else
+    {
+        puts("Resultado: falha");
+    }
     pthread_exit(NULL);
     return 0;
 }
