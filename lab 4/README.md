@@ -8,7 +8,7 @@ Concorrente | 100000 | 1 | 0,421518 | 1,00 |
 Concorrente | 100000 | 2 | 0,210869 | 1,99 |
 Concorrente | 100000 | 4 | 0,110453 | 3,81 |
 
-## Tabela 1
+## Tabela 2
 | Algoritmo | Tamanho | Nthreads | Duração | Razão |
 | --- | --- | ---: | --- | --- |
 Sequencial | 1000000 | NA | 4,256585 | |
@@ -16,7 +16,7 @@ Concorrente | 1000000 | 1 | 4,270652 | 1,00 |
 Concorrente | 1000000 | 2 | 2,155077 | 1,98 |
 Concorrente | 1000000 | 4 | 1,247910 | 3,41 |
 
-## Tabela 1
+## Tabela 3
 | Algoritmo | Tamanho | Nthreads | Duração | Razão |
 | --- | --- | ---: | --- | --- |
 Sequencial | 10000000 | NA | 43,274267 | |

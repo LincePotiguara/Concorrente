@@ -117,8 +117,8 @@ int main(int argc, char **argv)
     
     GET_TIME(fim);
     delta = fim - inicio;
-    //printf("Tempo sequencial (tamanho %lld) (nthreads %lld): %lf\n", arraySize, nthreads, delta);
-    printf("Sequencial#%lld#%lld#%lf\n", arraySize, nthreads, delta);
+    printf("Tempo sequencial (tamanho %lld) (nthreads %lld): %lf\n", arraySize, nthreads, delta);
+    //printf("Sequencial#%lld#%lld#%lf\n", arraySize, nthreads, delta);
 	
     // concorrente
     pthread_mutex_init(&lock, NULL);
@@ -145,13 +145,22 @@ int main(int argc, char **argv)
             fprintf(stderr, "ERRO--pthread_create()\n");return 3;
         }
     }
-    
 #endif 
 	pthread_mutex_destroy(&lock);
     GET_TIME(fim);
     delta = fim - inicio;
-    //printf("Tempo concorrente (tamanho %lld) (nthreads %lld): %lf\n", arraySize, nthreads, delta);
-    printf("Concorrente#%lld#%lld#%lf\n", arraySize, nthreads, delta);
+	float epsilon = 0.0001f, diff;
+	for(i64 i = 0; i < arraySize; i++)
+    {
+		diff = fabs(vectorSeqOut[i] - vectorConcOut[i]);
+        if(diff > epsilon)
+        {
+            printf("Erro excede limite calculado: %.9f limite: %.9f\n", diff, epsilon);
+			break;
+        }
+    }
+    printf("Tempo concorrente (tamanho %lld) (nthreads %lld): %lf\n", arraySize, nthreads, delta);
+    //printf("Concorrente#%lld#%lld#%lf\n", arraySize, nthreads, delta);
     free(vectorConcIn);
 	free(vectorConcOut);
     free(vectorSeqIn);
