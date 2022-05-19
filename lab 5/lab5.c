@@ -30,24 +30,22 @@ void* C(void* t);
 void* D(void* t);
 void* E(void* t);
 
-/* Variaveis globais */
-int x = 0;
+int mask = 0;
 pthread_mutex_t x_mutex;
 pthread_cond_t x_cond;
 
-// pthread_cond_signal(&x_cond);
 void* A(void* t)
 {
     pthread_mutex_lock(&x_mutex);
     pthread_cond_signal(&x_cond);
     printf("A\n");
-    while(!(x ^ (M2|M3|M4|M5)))
+    while(!(mask == (M2|M3|M4|M5)))
     {
         printf("A block\n");
         pthread_cond_wait(&x_cond, &x_mutex);
     }
-    x |= M1;
-    printf("A-broadcast\n");
+    mask |= M1;
+    printf("Volte sempre!\n");
     pthread_cond_signal(&x_cond);
     pthread_mutex_unlock(&x_mutex);
     pthread_exit(NULL);
@@ -57,13 +55,13 @@ void* B(void* t)
 {
     printf("B\n");
     pthread_mutex_lock(&x_mutex);
-    while(!(x & M5))
+    while(!(mask & M5))
     {
         printf("B block\n");
         pthread_cond_wait(&x_cond, &x_mutex);
     }
-    x |= M2;
-    printf("B-broadcast\n");
+    mask |= M2;
+    printf("Fique a vontade.\n");
     pthread_cond_signal(&x_cond);
     pthread_mutex_unlock(&x_mutex);
     pthread_exit(NULL);
@@ -73,13 +71,13 @@ void* C(void* t)
 {
     printf("C\n");
     pthread_mutex_lock(&x_mutex);
-    while(!(x & M5))
+    while(!(mask & M5))
     {
         printf("C block\n");
         pthread_cond_wait(&x_cond, &x_mutex);
     }
-    x |= M3;
-    printf("C-broadcast\n");
+    mask |= M3;
+    printf("Sente-se por favor.\n");
     pthread_cond_signal(&x_cond);
     pthread_mutex_unlock(&x_mutex);
     pthread_exit(NULL);
@@ -89,13 +87,13 @@ void* D(void* t)
 {
     printf("D\n");
     pthread_mutex_lock(&x_mutex);
-    while(!(x & M5))
+    while(!(mask & M5))
     {
         printf("D block\n");
         pthread_cond_wait(&x_cond, &x_mutex);
     }
-    x |= M4;
-    printf("D-broadcast\n");
+    mask |= M4;
+    printf("Aceita um copo d\'agua?\n");
     pthread_cond_signal(&x_cond);
     pthread_mutex_unlock(&x_mutex);
     pthread_exit(NULL);
@@ -105,26 +103,22 @@ void* E(void* t)
 {
     printf("E\n");
     pthread_mutex_lock(&x_mutex);
-    x |= M5;
+    mask |= M5;
+    printf("Seja bem-vindo!\n");
     pthread_cond_broadcast(&x_cond);
-    printf("E-broadcast\n");
     pthread_mutex_unlock(&x_mutex);
     pthread_exit(NULL);
 }
 
-/* Funcao principal */
+
 int main(int argc, char *argv[]) {
     int i;
-    x = 0;
+    mask = 0;
     pthread_t threads[NTHREADS];
-    //aloca espaco para os identificadores das threads
-    
-    /* Inicilaiza o mutex (lock de exclusao mutua) e a variavel de condicao */
+
     pthread_mutex_init(&x_mutex, NULL);
     pthread_cond_init (&x_cond, NULL);
-    
-    /* Cria as threads */
-    
+
     pthread_create(&threads[0], NULL, A, NULL);
     pthread_create(&threads[1], NULL, B, NULL);
     pthread_create(&threads[2], NULL, C, NULL);
@@ -132,14 +126,11 @@ int main(int argc, char *argv[]) {
     pthread_create(&threads[4], NULL, E, NULL);
     
     
-    /* Espera todas as threads completarem */
+    // Espera todas as threads completarem
     for (i = 0; i < NTHREADS; i++) {
         pthread_join(threads[i], NULL);
     }
-    
-    printf ("FIM.\n");
-    
-    /* Desaloca variaveis e termina */
+
     pthread_mutex_destroy(&x_mutex);
     pthread_cond_destroy(&x_cond);
 }
