@@ -13,7 +13,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
 
-#define DEBUG_PRINT 0
+
 #ifndef CONCURRENCY
 #define CONCURRENCY 0
 #endif
@@ -24,7 +24,6 @@ typedef struct
     long long int width;
     long long int height;
     int bytesPerPixel;
-    int idx;
 } ScreenBuffer;
 
 typedef struct
@@ -37,21 +36,20 @@ typedef struct
 Atom wmDeleteMessage;
 int isRunning = 0;
 double inicio = 0, fim = 0, delta = 0;
-#define NTHREADS 2
+#define NTHREADS 4
 int nthreads = 1;
 int setDisplay;
 long long int *fila;
 //variaveis para sincronizacao
-// FIXME: faça com que isso realmente funcione
 pthread_mutex_t mutex;
+pthread_mutex_t mutex2;
 pthread_mutex_t locker;
-pthread_cond_t cond_leit, cond_escr;
-int leader, gidx;
+int gidx;
 
-pthread_mutex_t *lock_list = 0;
 void* threadedSendRedrawEvent (void* params);
 XImage *create_ximage(Display *display, Visual *visual, ScreenBuffer* scbuffer);
 void reflect(uint8_t *p, ScreenBuffer scbuffer);
+void drawGradient(ScreenBuffer scbuffer);
 void processEvent(Display *display, Window window, XImage *xImage, ScreenBuffer *scbuffer, int width, int height);
 
 uint8_t find_closest_palette_color(uint8_t pixel);
@@ -60,8 +58,6 @@ void dithering(ScreenBuffer scbuffer);
 void *task (void *arg);
 void dithering_conc(ScreenBuffer scbuffer);
 void dither_line(ScreenBuffer scbuffer, long long int y);
-
-
 
 void processEvent(Display *display, Window window, XImage *xImage, ScreenBuffer *scbuffer, int width, int height)
 {
@@ -78,7 +74,6 @@ void processEvent(Display *display, Window window, XImage *xImage, ScreenBuffer 
             isRunning = 0;
             break;
         case ClientMessage:
-            // you can use atom to get properties information, WM_DELETE_WINDOW is a property
             if (ev.xclient.data.l[0] == wmDeleteMessage)
             {
                 isRunning = 0;
@@ -93,6 +88,7 @@ void processEvent(Display *display, Window window, XImage *xImage, ScreenBuffer 
     while (1)
     {
         usleep(args->delay*1000);
+
         memset(&expose, 0, sizeof(expose));
         expose.type = Expose;
         expose.xexpose.window = *(args->window);
@@ -101,13 +97,11 @@ void processEvent(Display *display, Window window, XImage *xImage, ScreenBuffer 
         if(!isRunning){break;}
     }
     pthread_exit(NULL);
-    // return NULL;
 }
 
 void reflect(uint8_t *p, ScreenBuffer scbuffer)
 {
     int i = 0;
-
     for (i = 0; i < scbuffer.width * scbuffer.height * scbuffer.bytesPerPixel; i +=4)
     {
         // BGR
@@ -175,7 +169,6 @@ ScreenBuffer load_img(char *image_name)
     buffer.width = img_width;
     buffer.bytesPerPixel = gray_img_channels;
     buffer.memory = gray_img;
-    /* stbi_write_jpg("sky_gray.png", img_width, img_height, gray_img_channels, gray_img, 95); */
     printf("Loaded image with a width of %dpx, a height of %dpx and %d channels\n", img_width, img_height, img_channels);
     stbi_image_free(img);
     return buffer;
@@ -217,8 +210,8 @@ int main(int argc, char **argv)
     GC gc;
     Window window;
     int screen;
-    long long int width = 5;
-    long long int height = 5;
+    long long int width = 512;
+    long long int height = 512;
     pthread_t thread;
     ScreenBuffer imgbuffer = {};
     ScreenBuffer scbuffer = {};
@@ -244,7 +237,6 @@ int main(int argc, char **argv)
         nthreads = strtol(argv[2], NULL, 10);
         setDisplay = 0;
     }
-    // connect to server
     if(setDisplay)
     {
         display = XOpenDisplay(NULL);
@@ -283,15 +275,9 @@ int main(int argc, char **argv)
     isRunning = 1;
 
     pthread_mutex_init(&mutex, NULL);
+    pthread_mutex_init(&mutex2, NULL);
     pthread_mutex_init(&locker, NULL);
     pthread_cond_init(&done, NULL);
-    // Inicializa a lista de locks
-
-    lock_list = malloc(sizeof(pthread_mutex_t) * nthreads);
-    for(int i = 0; i < nthreads; i++)
-    {
-        pthread_mutex_init(&lock_list[i], NULL);
-    }
 
     fila = malloc(sizeof(long long int)*height);
     memset(fila, 0, sizeof(long long int)*height);
@@ -304,13 +290,20 @@ int main(int argc, char **argv)
 #else
         dithering(imgbuffer);
 #endif
-        /* stbi_write_jpg("dither256.jpg", width, height, 4, imgbuffer.memory, 100); */
     }
     else if(argc == 3)
     {
         drawGradient(scbuffer);
+        GET_TIME(inicio);
+        printf("Dithering sequencial\n");
+        dithering(scbuffer);
+        GET_TIME(fim);
+        delta = fim - inicio;
+        printf("Dithering sequencial: %lf\n", delta);
+        fflush(stdout);
+        
+        drawGradient(scbuffer);
         printf("Dithering concorrente\n");
-
         GET_TIME(inicio);
         dithering_conc(scbuffer);
         GET_TIME(fim);
@@ -327,6 +320,7 @@ int main(int argc, char **argv)
 #endif
     }
 
+
     while(isRunning)
     {
         if(argc == 2) {
@@ -341,7 +335,6 @@ int main(int argc, char **argv)
             processEvent(display, window, xGradient, &scbuffer, width, height);
         }
     }
-    printf("Encerrando\n");
     if(xImage) {XDestroyImage(xImage);}
     if(xGradient) {XDestroyImage(xGradient);}
     if(setDisplay)
@@ -351,22 +344,16 @@ int main(int argc, char **argv)
         XFreeGC(display, gc);
         XCloseDisplay(display);
     }
-    for(int i = 0; i < nthreads; i++)
-    {
-        pthread_mutex_destroy(&lock_list[i]);
-    }
-    free(lock_list);
+
     if(img) stbi_image_free(img);
     free(fila);
     if(!setDisplay){free(scbuffer.memory);}
+
     return 0;
 }
 
 void dithering_conc(ScreenBuffer scbuffer)
 {
-    //FIXME Esse procedimento entra em deadlocks
-    //FIXME Esse procedimento acessa memoria invalidamente
-    /* printf("Dithering Concorrente inicio\n"); */
     pthread_t *tid = malloc(sizeof(pthread_t) * NTHREADS);
     ScreenBuffer *args = malloc(sizeof(ScreenBuffer) * NTHREADS);
     for(int i = 0; i < NTHREADS; i++)
@@ -375,7 +362,6 @@ void dithering_conc(ScreenBuffer scbuffer)
         args[i].height = scbuffer.height;
         args[i].bytesPerPixel = scbuffer.bytesPerPixel;
         args[i].memory = scbuffer.memory;
-        args[i].idx = i;
         pthread_create(&tid[i], NULL, task, (void*) &args[i]);
     }
     for(int i = 0; i < NTHREADS; i++)
@@ -396,22 +382,22 @@ void *task (void *arg)
     // o indice global diz qual linha será a próxima discretizada
     while(1)
     {
+        pthread_mutex_lock(&mutex2);
         if(gidx < buffer->height)
         {
-            pthread_mutex_lock(&mutex);
             i = gidx++;
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(&mutex2);
             dither_line(*buffer, i);
         }
         else
         {
+            pthread_mutex_unlock(&mutex2);
             break;
         }
     }
     return NULL;
 }
 
-#define conc 0
 void dither_line(ScreenBuffer scbuffer, long long int y)
 {
     int oldpixel, newpixel, error;
@@ -423,11 +409,9 @@ void dither_line(ScreenBuffer scbuffer, long long int y)
         while(1)
         {
             pthread_mutex_lock(&locker);
-
             if((y == 0) || (fila[y-1] > x + 3) || (fila[y-1] == scbuffer.width))
             {
                 pthread_mutex_unlock(&locker);
-
                 oldpixel = data[y*scbuffer.width * scbuffer.bytesPerPixel + x * scbuffer.bytesPerPixel];
                 newpixel = find_closest_palette_color(oldpixel);
 
@@ -442,23 +426,18 @@ void dither_line(ScreenBuffer scbuffer, long long int y)
                 addPixelError(scbuffer, x+1, y  , (error*7)/16);
                 addPixelError(scbuffer, x+1, y+1, (error*1)/16);
                 fila[y] = x;
-                if((scbuffer.width*3/2 == x) | (scbuffer.width/2 == x))
-                {
-                    pthread_cond_broadcast(&done);
-                }
+                pthread_cond_broadcast(&done);
+                /* pthread_cond_signal(&done); */
                 break;
             }
             else
             {
-
                 pthread_cond_broadcast(&done);
-
                 pthread_cond_wait(&done, &locker);
-
                 pthread_mutex_unlock(&locker);
             }
         }
-        fila[y] = scbuffer.width;
+        if(x == scbuffer.width - 1){fila[y] = scbuffer.width;}
     }
 }
 
